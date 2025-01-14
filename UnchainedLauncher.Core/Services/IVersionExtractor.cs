@@ -1,13 +1,12 @@
 ﻿using Semver;
 
 namespace UnchainedLauncher.Core.Utilities {
-    public interface IVersionExtractor<T> {
-
+    public interface IVersionExtractor {
         /// <summary>
-        /// Provided some target T (like a file path), output the SemVersion of the associated object.
+        /// Provided some identifier (like a file path), output the SemVersion of the associated object.
         /// </summary>
         /// <param name="input">Some identifier used to locate a versioned resource</param>
         /// <returns>The version of the target</returns>
-        SemVersion? GetVersion(T input);
+        SemVersion? GetVersion(string input);
     }
 }

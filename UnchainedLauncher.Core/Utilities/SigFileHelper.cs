@@ -1,7 +1,6 @@
 ﻿using log4net;
-using UnchainedLauncher.Core.Utilities;
 
-namespace UnchainedLauncher.Core {
+namespace UnchainedLauncher.Core.Utilities {
     public static class SigFileHelper {
         private static readonly ILog log = LogManager.GetLogger(typeof(SigFileHelper));
 
@@ -39,14 +38,14 @@ namespace UnchainedLauncher.Core {
             }
         }
 
-        public static void CheckAndCopySigFiles() {
+        public static bool CheckAndCopySigFiles() {
             try {
                 var files = GetPakAndSigFiles();
-                if (files == null) return;
+                if (files == null) return false;
 
                 if (!File.Exists(DefaultSigFile)) {
                     log.Error($"Default .sig file not found: {DefaultSigFile}");
-                    return;
+                    return false;
                 }
 
                 foreach (var file in files) {
@@ -57,17 +56,19 @@ namespace UnchainedLauncher.Core {
                     }
                 }
 
-                log.Info("Process completed.");
+                log.Info("Sig files copied.");
+                return true;
             }
             catch (Exception ex) {
                 log.Error("An error occurred during the sig file checking process.", ex);
+                return false;
             }
         }
 
-        public static void DeleteOrphanedSigFiles() {
+        public static bool DeleteOrphanedSigFiles() {
             try {
                 var files = GetPakAndSigFiles();
-                if (files == null) return;
+                if (files == null) return false;
 
                 foreach (var file in files) {
                     if (!file.Value.HasPak && file.Value.HasSig) {
@@ -78,16 +79,18 @@ namespace UnchainedLauncher.Core {
                 }
 
                 log.Info("Orphaned sig files deletion completed.");
+                return true;
             }
             catch (Exception ex) {
                 log.Error("An error occurred during the deletion of orphaned sig files.", ex);
+                return false;
             }
         }
 
-        public static void RemoveAllNonDefaultSigFiles() {
+        public static bool RemoveAllNonDefaultSigFiles() {
             try {
                 var files = GetPakAndSigFiles();
-                if (files == null) return;
+                if (files == null) return false;
 
                 foreach (var file in files) {
                     if (file.Key != "pakchunk0-WindowsNoEditor" && file.Value.HasSig) {
@@ -98,9 +101,11 @@ namespace UnchainedLauncher.Core {
                 }
 
                 log.Info("Non-default sig files deletion completed.");
+                return true;
             }
             catch (Exception ex) {
                 log.Error("An error occurred during the deletion of non-default sig files.", ex);
+                return false;
             }
         }
     }

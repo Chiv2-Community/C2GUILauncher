@@ -171,6 +171,7 @@ namespace UnchainedLauncher.GUI.ViewModels {
 
                 var options = new ModdedLaunchOptions(
                     SettingsViewModel.ServerBrowserBackend,
+                    SettingsViewModel.EnablePluginAutomaticUpdates,
                     None,
                     Some(serverLaunchOptions)
                 );

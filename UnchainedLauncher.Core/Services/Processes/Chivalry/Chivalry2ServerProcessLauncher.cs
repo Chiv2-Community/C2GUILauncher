@@ -5,7 +5,7 @@ namespace UnchainedLauncher.Core.Services.Processes.Chivalry {
     public class Chivalry2ServerProcessLauncher {
         public IUnchainedChivalry2Launcher Launcher { get; set; }
         public ModdedLaunchOptions ModdedLaunchOptions { get; set; }
-        public LanguageExt.Option<ServerLaunchOptions> ServerLaunchOptions { get; set; }
+        public Option<ServerLaunchOptions> ServerLaunchOptions { get; set; }
         string ExtraArgs { get; set; }
         public Chivalry2ServerProcessLauncher(IUnchainedChivalry2Launcher launcher,
                                            ModdedLaunchOptions options,

@@ -6,7 +6,7 @@ namespace UnchainedLauncher.Core.Utilities {
     /// <summary>
     /// Uses file metadata to extract the SemVersion of the provided file path
     /// </summary>
-    public class FileInfoVersionExtractor : IVersionExtractor<string> {
+    public class FileInfoVersionExtractor : IVersionExtractor {
         private readonly ILog logger = LogManager.GetLogger(typeof(FileInfoVersionExtractor));
 
         public SemVersion? GetVersion(string filePath) {

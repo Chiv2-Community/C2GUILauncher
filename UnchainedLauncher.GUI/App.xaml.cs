@@ -14,6 +14,7 @@ using UnchainedLauncher.Core.Services.Mods.Registry;
 using UnchainedLauncher.Core.Services.Mods.Registry.Downloader;
 using UnchainedLauncher.Core.Services.Processes;
 using UnchainedLauncher.Core.Services.Processes.Chivalry;
+using UnchainedLauncher.Core.Services.Processes.Chivalry.LaunchPreparers;
 using UnchainedLauncher.Core.Utilities;
 using UnchainedLauncher.GUI.Services;
 using UnchainedLauncher.GUI.ViewModels;
@@ -112,28 +113,36 @@ namespace UnchainedLauncher.GUI {
             var officialProcessLauncher = new ProcessLauncher(Path.Combine(Directory.GetCurrentDirectory(), FilePaths.OriginalLauncherPath));
             var unchainedProcessLauncher = new ProcessLauncher(Path.Combine(Directory.GetCurrentDirectory(), FilePaths.GameBinPath));
 
+            var noSigLaunchPreparer = NoSigPreparer.Create(userDialogueSpawner);
+            var sigLaunchPreparer = SigPreparer.Create(userDialogueSpawner);
+
+            var unchainedContentPreparer = UnchainedDependencyPreparer.Create(
+                modManager,
+                pluginReleaseLocator,
+                new FileInfoVersionExtractor(),
+                userDialogueSpawner);
+
             var vanillaLauncher = new OfficialChivalry2Launcher(
+                noSigLaunchPreparer,
                 officialProcessLauncher,
                 Directory.GetCurrentDirectory()
             );
 
-            var clientsideModdedLauncher = new ClientSideModdedOfficialChivalry2Launcher(
+            var clientsideModdedLauncher = new OfficialChivalry2Launcher(
+                sigLaunchPreparer,
                 officialProcessLauncher,
                 Directory.GetCurrentDirectory()
             );
 
             var unchainedLauncher = new UnchainedChivalry2Launcher(
+                unchainedContentPreparer.Sub(sigLaunchPreparer, _ => Unit.Default),
                 unchainedProcessLauncher,
-                modManager,
-                pluginReleaseLocator,
-                new FileInfoVersionExtractor(),
-                userDialogueSpawner,
                 Directory.GetCurrentDirectory(),
                 new DllInjector(Path.Combine(Directory.GetCurrentDirectory(), FilePaths.PluginDir))
             );
 
             var serversViewModel = new ServersViewModel(settingsViewModel, null);
-            var launcherViewModel = new LauncherViewModel(settingsViewModel, modManager, vanillaLauncher, clientsideModdedLauncher, unchainedLauncher, pluginReleaseLocator, new FileInfoVersionExtractor(), userDialogueSpawner);
+            var launcherViewModel = new LauncherViewModel(settingsViewModel, vanillaLauncher, clientsideModdedLauncher, unchainedLauncher, userDialogueSpawner);
             var serverLauncherViewModel = ServerLauncherViewModel.LoadSettings(settingsViewModel, serversViewModel, unchainedLauncher, modManager, userDialogueSpawner);
             var modListViewModel = new ModListViewModel(modManager, userDialogueSpawner);
 
@@ -143,11 +152,11 @@ namespace UnchainedLauncher.GUI {
 
             // TODO: Replace this if/else chain with a real CLI
             if (envArgs.Contains("--startvanilla")) {
-                launcherViewModel.LaunchVanilla(false);
+                await launcherViewModel.LaunchVanilla(false);
                 return null;
             }
             else if (envArgs.Contains("--startmodded")) {
-                launcherViewModel.LaunchVanilla(true);
+                await launcherViewModel.LaunchVanilla(true);
                 return null;
             }
             else if (envArgs.Contains("--startunchained")) {

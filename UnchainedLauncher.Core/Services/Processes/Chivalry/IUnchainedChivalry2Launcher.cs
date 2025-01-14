@@ -38,5 +38,54 @@ namespace UnchainedLauncher.Core.Services.Processes.Chivalry {
         public static UnchainedLaunchFailure LaunchCancelled() => new LaunchCancelledError();
     }
 
+    public record ModdedLaunchOptions(
+        string ServerBrowserBackend,
+        bool CheckForDependencyUpdates,
+        Option<string> SavedDirSuffix,
+        Option<ServerLaunchOptions> ServerLaunchOptions
+    ) {
+        public IEnumerable<string> ToCLIArgs() {
+            var args = new List<string> {
+                $"--server-browser-backend {ServerBrowserBackend}"
+            };
+            ServerLaunchOptions.IfSome(opts => args.AddRange(opts.ToCLIArgs()));
+
+            var suffix = SavedDirSuffix.IfNone("Unchained");
+            args.Add($"--saved-dir-suffix {suffix}");
+
+            return args;
+        }
+    };
+
+    public record ServerLaunchOptions(
+        bool Headless,
+        string Name,
+        string Description,
+        Option<string> Password,
+        string Map,
+        int GamePort,
+        int BeaconPort,
+        int QueryPort,
+        int RconPort
+    ) {
+        public IEnumerable<String> ToCLIArgs() {
+            var args = new List<string>();
+            if (Headless) {
+                args.Add("-nullrhi");
+                args.Add("-unattended");
+                args.Add("-nosound");
+            }
+
+            Password.IfSome(password => args.Add($"ServerPassword={password.Trim()}"));
+            args.Add($"--next-map-name {Map}");
+            args.Add($"Port={GamePort}");
+            args.Add($"GameServerPingPort={BeaconPort}");
+            args.Add($"GameServerQueryPort={QueryPort}");
+            args.Add($"--rcon {RconPort}");
+
+            return args;
+        }
+    };
+
 
 }
