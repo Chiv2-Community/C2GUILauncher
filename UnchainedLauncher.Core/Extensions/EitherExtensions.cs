@@ -62,5 +62,39 @@ namespace UnchainedLauncher.Core.Extensions {
                 return f(l).MapLeft(_ => l);
             });
         }
+
+        /// <summary>
+        /// If there are any lefts, returns all of them as left.
+        /// Otherwise, returns right as unit
+        /// </summary>
+        /// <param name="eithers"></param>
+        /// <typeparam name="TL"></typeparam>
+        /// <returns>Left(any lefts in the enumerable), Right(Unit) if there were no lefts</returns>
+        public static Either<IEnumerable<TL>, Unit> BindLefts<TL>(this IEnumerable<Either<TL, Unit>> eithers) {
+            return eithers.Fold(
+                Either<Lst<TL>, Unit>.Right(Unit.Default),
+                (s, n) => n.Match(
+                    _ => s,
+                    l => s.Match(
+                        _ => Lst<TL>.Empty.Add(l),
+                        existing => existing.Add(l)
+                    )
+                )
+            ).MapLeft(l => (IEnumerable<TL>)l);
+        }
+
+        /// <summary>
+        /// If there are any lefts, returns all of them as left.
+        /// Otherwise, returns right as unit
+        /// </summary>
+        /// <param name="eithers"></param>
+        /// <typeparam name="TL"></typeparam>
+        /// <returns>Left(any lefts in the enumerable), Right(Unit) if there were no lefts</returns>
+        public static EitherAsync<IEnumerable<TL>, Unit> BindLefts<TL>(this IEnumerable<EitherAsync<TL, Unit>> eithers) {
+            // all eithers must be resolved in order to discriminate them
+            return Task.WhenAll(eithers.Map(async e => await e))
+                .Map(res => res.BindLefts())
+                .ToAsync();
+        }
     }
 }

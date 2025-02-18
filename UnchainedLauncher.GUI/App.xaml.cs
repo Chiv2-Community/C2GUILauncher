@@ -11,6 +11,7 @@ using UnchainedLauncher.Core.Services;
 using UnchainedLauncher.Core.Services.Installer;
 using UnchainedLauncher.Core.Services.Mods;
 using UnchainedLauncher.Core.Services.Mods.Registry;
+using UnchainedLauncher.Core.Services.PakDir;
 using UnchainedLauncher.Core.Services.Processes;
 using UnchainedLauncher.Core.Services.Processes.Chivalry;
 using UnchainedLauncher.Core.Services.Processes.Chivalry.LaunchPreparers;
@@ -106,8 +107,8 @@ namespace UnchainedLauncher.GUI {
 
         private Window? InitializeMainWindow(IChivalry2InstallationFinder installationFinder, IUnchainedLauncherInstaller installer, IReleaseLocator launcherReleaseLocator, IReleaseLocator pluginReleaseLocator) {
             var userDialogueSpawner = new MessageBoxSpawner();
-
-            var settingsViewModel = SettingsVM.LoadSettings(installationFinder, installer, launcherReleaseLocator, userDialogueSpawner, Environment.Exit);
+            var pakDir = new PakDir(FilePaths.PakDir);
+            var settingsViewModel = SettingsVM.LoadSettings(installationFinder, installer, launcherReleaseLocator, pakDir, userDialogueSpawner, Environment.Exit);
 
             var modRegistry = InitializeModRegistry(FilePaths.RegistryConfigPath);
             var modManager = InitializeModManager(FilePaths.ModManagerConfigPath, modRegistry);
@@ -126,8 +127,8 @@ namespace UnchainedLauncher.GUI {
             var unchainedProcessLauncher = new ProcessLauncher(Path.Combine(Directory.GetCurrentDirectory(), FilePaths.GameBinPath));
 #endif
 
-            var noSigLaunchPreparer = NoSigPreparer.Create(userDialogueSpawner);
-            var sigLaunchPreparer = SigPreparer.Create(userDialogueSpawner);
+            var noSigLaunchPreparer = NoSigPreparer.Create(pakDir, userDialogueSpawner);
+            var sigLaunchPreparer = SigPreparer.Create(pakDir, userDialogueSpawner);
 
             IChivalry2LaunchPreparer<LaunchOptions> pluginInstaller = new UnchainedPluginUpdateChecker(
                 pluginReleaseLocator,
@@ -135,7 +136,7 @@ namespace UnchainedLauncher.GUI {
                 userDialogueSpawner);
 
             IChivalry2LaunchPreparer<LaunchOptions> modInstaller = new Chivalry2ModsInstaller(
-                modRegistry, userDialogueSpawner
+                modRegistry, pakDir, userDialogueSpawner
             );
 
             var vanillaLauncher = new Chivalry2Launcher(

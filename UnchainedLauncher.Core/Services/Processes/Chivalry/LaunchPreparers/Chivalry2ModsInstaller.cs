@@ -4,84 +4,74 @@ using log4net;
 using UnchainedLauncher.Core.Extensions;
 using UnchainedLauncher.Core.JsonModels.Metadata.V3;
 using UnchainedLauncher.Core.Services.Mods.Registry;
+using UnchainedLauncher.Core.Services.PakDir;
 using UnchainedLauncher.Core.Utilities;
 
 namespace UnchainedLauncher.Core.Services.Processes.Chivalry.LaunchPreparers {
     using static LanguageExt.Prelude;
 
-    // TODO: turn this into a class that overall represents the pak subdir.
-    // Anything that wants to add, remove, or check paks in the paks subdir
-    // does so through that object. We have a lot of that behavior happening
-    // manually when there is actually a specific set of operations 
-    // that we want to model.
-    public class LastInstalledPakVersionMeta {
-        ILog _logger = LogManager.GetLogger(typeof(LastInstalledPakVersionMeta));
-        public IEnumerable<ReleaseCoordinates> Coordinates { get; private set; }
-        private readonly string _infoFilePath;
-        public LastInstalledPakVersionMeta(string infoFilePath) {
-            Coordinates = ReadCoordinates(infoFilePath);
-            _infoFilePath = infoFilePath;
-        }
-
-        public bool UpdateVersion(ReleaseCoordinates coordinates) {
-            if (Coordinates.Any(c => c.Matches(coordinates) && c.Version == coordinates.Version))
-                return false;
-
-            Coordinates = Coordinates
-                .Filter(c => !c.Matches(coordinates))
-                .Append(coordinates);
-            return true;
-        }
-
-        private IEnumerable<ReleaseCoordinates> ReadCoordinates(string infoFilePath) {
-            return Try(() => File.ReadAllText(infoFilePath))()
-                .Match(
-                    Some,
-                    e => {
-                        if (e is FileNotFoundException or DirectoryNotFoundException) {
-                            return None;
-                        }
-
-                        _logger.Error($"Could not read installed paks metadata file {infoFilePath}: {e}");
-                        return None;
-                    }
-                ).Map(
-                    contents => JsonHelpers
-                        .Deserialize<IEnumerable<ReleaseCoordinates>>(contents)
-                        .ToEither()
-                        .Match(
-                            Some,
-                            e => {
-                                _logger.Error($"Couldn't parse installed paks metadata file", e);
-                                return None;
-                            })
-                )
-                .Flatten()
-                .Match(
-                    s => s,
-                    () => new List<ReleaseCoordinates>()
-                );
-        }
-
-        public void Save() {
-            try {
-                var serialized = JsonHelpers.Serialize(Coordinates);
-                File.WriteAllText(_infoFilePath, serialized);
-            }
-            catch (Exception e) {
-                _logger.Error("Failed to write installed paks metadata file", e);
-            }
-        }
-    }
-
-
     public class Chivalry2ModsInstaller : IChivalry2LaunchPreparer<LaunchOptions> {
         private readonly ILog _logger = LogManager.GetLogger(typeof(Chivalry2ModsInstaller));
         private readonly IUserDialogueSpawner _userDialogueSpawner;
+        private readonly IPakDir _pakDir;
         private IModRegistry _modRegistry { get; }
-        public Chivalry2ModsInstaller(IModRegistry registry, IUserDialogueSpawner dialogueSpawner) {
+        public Chivalry2ModsInstaller(IModRegistry registry, IPakDir pakDir, IUserDialogueSpawner dialogueSpawner) {
             _modRegistry = registry;
+            _pakDir = pakDir;
             _userDialogueSpawner = dialogueSpawner;
+        }
+
+        private OptionAsync<string> GetHashResult(EitherAsync<HashFailure, Option<string>> result) {
+            return result.TapLeft<HashFailure, Option<string>, object>(e =>
+                _logger.Error($"Failed to hash file", e)
+                )
+                .ToOption()
+                .Bind(o => o.Match(OptionAsync<string>.Some, OptionAsync<string>.None));
+        }
+
+        private OptionAsync<string> GetLocalHash(ReleaseCoordinates coords) {
+            return _pakDir.GetInstalledPakFile(coords)
+                .Match(
+                    path => GetHashResult(FileHelpers.Sha512Async(path)),
+                    () => OptionAsync<string>.None);
+
+        }
+
+        private Unit ifHashInvalid((Release, string, string) validationResult) {
+            var coords = ReleaseCoordinates.FromRelease(validationResult.Item1);
+            _logger.Warn($"Hash mismatch: actual hash '{validationResult.Item2}' does not " +
+                         $"match release hash '{validationResult.Item3}' for '{coords}'.");
+
+            var redownloadResponse = _userDialogueSpawner.DisplayYesNoMessage(
+                $"The hash for release {coords} is not correct. " +
+                $"This indicates that the file on disk does not match " +
+                $"what is approved by the mod registry. This could be due to " +
+                $"simple file corruption, but could also indicate that the version " +
+                $"you have is malicious.\n\n" +
+                $"Expected: {validationResult.Item3}\n" +
+                $"Actual: {validationResult.Item2}\n\n" +
+                $"Would you like to re-download the pak? (recommended)", "Refresh pak file?");
+
+            if (redownloadResponse == UserDialogueChoice.Yes) {
+                _pakDir.Uninstall(coords)
+                    .IfLeft(e =>
+                        _logger.Error($"Failed to uninstall release '{coords}' with invalid hash", e));
+            }
+
+            return Unit.Default;
+        }
+
+        private async Task ValidateHashes(IEnumerable<Release> releases) {
+            var hashValidationTasks = releases
+                .Map(m =>
+                    GetLocalHash(ReleaseCoordinates.FromRelease(m))
+                        .Map(h => (m, h, m.ReleaseHash))
+                        // select only those whose hashes do not match
+                        .Filter(o => !o.Item2.Equals(o.Item3))
+                        .IfSome(ifHashInvalid)
+                );
+
+            await Task.WhenAll(hashValidationTasks);
         }
 
         public async Task<Option<LaunchOptions>> PrepareLaunch(LaunchOptions options) {
@@ -107,76 +97,54 @@ namespace UnchainedLauncher.Core.Services.Processes.Chivalry.LaunchPreparers {
                 return None;
             }
 
-            // delete any paks not mentioned in this launch
+            await ValidateHashes(metas);
+
             // TODO: do something more clever than just deleting. This weirdness ultimately comes
             // from the fact that launches share a pak dir, and can affect each other.
             // This stuff is only really relevant to servers, and there's probably not much
             // we can do without adding some seriously in-depth hooks in the plugin
             // that allows doing some kind of per-process pak dir isolation
-            var modFileNames = metas.Map(m => m.PakFileName);
+            var progresses = new AccumulatedMemoryProgress(taskName: "Installing releases");
+            var installOnlyResult = _pakDir.InstallOnly(
+                metas.Map<Release, (ReleaseCoordinates, IPakDir.MakeFileWriter, string)>(m => {
+                    var coords = ReleaseCoordinates.FromRelease(m);
 
-            Directory.EnumerateFiles(FilePaths.PakDir)
-                .Filter(f => f.Contains(".pak"))
-                .Filter(f => !f.Contains("pakchunk0-WindowsNoEditor.pak"))
-                .Filter(f => !modFileNames.Any(f.Contains))
-                .Select(file => PrimitiveExtensions.TryVoid(() => {
-                    _logger.Info($"Deleting pak file '{file}' because it is not declared for this launch");
-                    File.Delete(file);
-                }))
-                .ToList()
-                .ForEach(tryResult => tryResult.IfFail(e => _logger.Error($"Failed to delete file", e)));
+                    return (
+                        coords,
+                        (outputPath) => _modRegistry.DownloadPak(coords, outputPath)
+                            .MapLeft(e => Error.New(e)),
+                        m.PakFileName
+                    );
+                }
+                ), progresses
+            ).Match(
+                _ => Some(options),
+                errors => {
+                    errors.ToList().ForEach(e => _logger.Error($"Failed to install releases: {e.Message}"));
 
-
-            // tracks versions of installed paks
-            var installedFiles = new LastInstalledPakVersionMeta(FilePaths.LastInstalledPakVersionList);
-            var downloadsMap = new Map<ReleaseCoordinates, Release>()
-                .AddRange(releases.Zip(metas))
-                .Filter(release => {
-                    var alreadyExists = File.Exists(Path.Join(FilePaths.PakDir, release.PakFileName));
-                    var isDifferentVersion = installedFiles.UpdateVersion(ReleaseCoordinates.FromRelease(release));
-                    if (isDifferentVersion || !alreadyExists) {
-                        return true;
-                    }
-
-                    _logger.Info($"Not overwriting already installed and versioned mod {release.PakFileName}");
-                    return false;
-
+                    _userDialogueSpawner.DisplayMessage(
+                        $"There were errors while installing releases:\n " +
+                        $"{errors.Aggregate((a, b) => $"{a}\n\n{b}")}"
+                        );
+                    return None;
                 });
 
-            var cts = new CancellationTokenSource(6000);
+            var closeProgressWindow = _userDialogueSpawner.DisplayProgress(progresses);
 
-            // TODO: display download progress as a popup or something
-            var downloads = await Task.WhenAll(
-                downloadsMap.Pairs.Map(p =>
-                    _modRegistry.DownloadPak(p.Item1, Path.Join(FilePaths.PakDir, p.Item2.PakFileName))
-                )
-                    .Map(e =>
-                        e.Map(writer => writer.WriteAsync(None, cts.Token))
-                    ).Map(e =>
-                        e.MatchAsync(r =>
-                                r.Match(
-                                _ => None,
-                                Some<Error>
-                            ),
-                        Some<Error>
-                    )
-                )
-                );
+            var finalResult = await installOnlyResult;
 
-            var downloadFailureCount = downloads
-                .Choose(identity)
-                .Fold(0, (s, e) => {
-                    _logger.Error($"Failed to download mod: {e.Message}");
-                    return s + 1;
-                });
+            closeProgressWindow();
 
-            if (downloadFailureCount != 0) {
-                return None;
-            }
-            // save new versions of paks in this dir
-            installedFiles.Save();
+            _pakDir.EnforceOrdering(options.EnabledReleases)
+                .IfLeft(
+                    lefts => lefts
+                        .ToList()
+                        .ForEach(e =>
+                                _logger.Error($"Failed to enforce pak file ordering:", e)
+                            )
+                    );
 
-            return options;
+            return finalResult;
         }
     }
 }

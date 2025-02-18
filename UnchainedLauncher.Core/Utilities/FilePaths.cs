@@ -7,7 +7,6 @@
         public const string PluginDir = BinDir + "\\Plugins";
         public const string UnchainedPluginPath = PluginDir + "\\UnchainedPlugin.dll";
         public const string PakDir = "TBL\\Content\\Paks";
-        public const string LastInstalledPakVersionList = $"{PakDir}\\LastInstalledVersions.json";
         public const string SteamAppIdPath = BinDir + "\\steam_appid.txt";
         public const string ModCachePath = ".mod_cache";
         public const string LauncherSettingsFilePath = $"{ModCachePath}\\unchained_launcher_settings.json";

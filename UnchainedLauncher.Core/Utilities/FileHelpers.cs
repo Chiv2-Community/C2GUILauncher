@@ -145,7 +145,7 @@ namespace UnchainedLauncher.Core.Utilities {
                             var percentage = (double)totalBytesWritten / Size * 100;
 
                             progress.IfSome(p => p.Report(percentage));
-                            logger.Debug($"Wrote {totalBytesWritten} bytes to file '{FilePath}'. Progress: {percentage}%");
+                            //logger.Debug($"Wrote {totalBytesWritten} bytes to file '{FilePath}'. Progress: {percentage}%");
                         }
                     }
 

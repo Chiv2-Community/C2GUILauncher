@@ -23,6 +23,10 @@ namespace UnchainedLauncher.Core.Services.Mods.Registry {
             other == null
                 ? -1
                 : (this.Org, this.ModuleName).CompareTo((other.Org, other.ModuleName));
+
+        public override string ToString() {
+            return $"('{Org}','{ModuleName}')";
+        }
     }
 
     public record ReleaseCoordinates(string Org, string ModuleName, string Version) : ModIdentifier(Org, ModuleName), IComparable<ReleaseCoordinates> {
@@ -45,6 +49,10 @@ namespace UnchainedLauncher.Core.Services.Mods.Registry {
                 (_, _) =>
                     (this.Org, this.ModuleName, thisVersion).CompareTo((other.Org, other.ModuleName, otherVersion!)),
             };
+        }
+
+        public override string ToString() {
+            return $"('{Org}','{ModuleName}', '{Version}')";
         }
     }
 

@@ -1,9 +1,11 @@
 ﻿using UnchainedLauncher.Core.Services.Mods;
+using UnchainedLauncher.Core.Utilities;
 
 namespace UnchainedLauncher.Core.Services {
 
 
     public interface IUserDialogueSpawner {
+
         public void DisplayMessage(string message);
         public UserDialogueChoice DisplayYesNoMessage(string message, string caption);
 
@@ -17,6 +19,14 @@ namespace UnchainedLauncher.Core.Services {
 
             return DisplayUpdateMessage(titleText, messageText, yesButtonText, noButtonText, cancelButtonText, allUpdates);
         }
+
+        /// <summary>
+        /// Displays a progress popup window for the user. Returns an action that, when called, will close the window
+        /// regardless of whether the progress is completed
+        /// </summary>
+        /// <param name="progress"></param>
+        /// <returns></returns>
+        public Action DisplayProgress(MemoryProgress progress);
     }
 
     public enum UserDialogueChoice {
@@ -30,5 +40,4 @@ namespace UnchainedLauncher.Core.Services {
             return new DependencyUpdate(modUpdate.CurrentlyEnabled.Manifest.Name, modUpdate.CurrentlyEnabled.Tag, modUpdate.AvailableUpdate.Tag, modUpdate.AvailableUpdate.ReleaseUrl, "");
         }
     };
-
 }

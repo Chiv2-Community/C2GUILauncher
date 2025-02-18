@@ -193,8 +193,20 @@ namespace UnchainedLauncher.Core.Services.Mods {
         }
 
         public static IEnumerable<ReleaseCoordinates> GetEnabledAndDependencies(this IModManager modManager) {
-            return modManager.GetEnabledAndDependencyReleases()
+            var enabled = modManager.GetEnabledAndDependencyReleases()
                 .Map(ReleaseCoordinates.FromRelease);
+
+            // make sure unchained-mods always comes first
+            var unchainedMods = new ModIdentifier("Chiv2-Community", "Unchained-Mods");
+            var installedUnchainedMods = enabled
+                .Filter(r => r.Matches(unchainedMods))
+                .ToOption();
+
+            return installedUnchainedMods.Match(
+                r => Lst<ReleaseCoordinates>.Empty.Add(r)
+                    .Append(enabled.Filter(release => !release.Matches(unchainedMods))),
+                () => enabled
+                );
         }
 
         public static IEnumerable<Release> GetEnabledAndDependencyReleases(this IModManager modManager) {

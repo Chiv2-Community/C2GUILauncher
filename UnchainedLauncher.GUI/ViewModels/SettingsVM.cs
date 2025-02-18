@@ -13,13 +13,12 @@ using System.Threading.Tasks;
 using UnchainedLauncher.Core.JsonModels;
 using UnchainedLauncher.Core.Services;
 using UnchainedLauncher.Core.Services.Installer;
+using UnchainedLauncher.Core.Services.PakDir;
 using UnchainedLauncher.Core.Services.Processes;
 using UnchainedLauncher.Core.Utilities;
 using UnchainedLauncher.GUI.JsonModels;
 
 namespace UnchainedLauncher.GUI.ViewModels {
-    using static LanguageExt.Prelude;
-
     [AddINotifyPropertyChangedInterface]
     public partial class SettingsVM : IDisposable {
         private static readonly ILog Logger = LogManager.GetLogger(nameof(SettingsVM));
@@ -47,6 +46,7 @@ namespace UnchainedLauncher.GUI.ViewModels {
 
         public bool IsLauncherReusable() => InstallationType == InstallationType.Steam;
 
+        public IPakDir PakDir { get; private set; }
 
         private IUserDialogueSpawner UserDialogueSpawner { get; }
 
@@ -60,9 +60,10 @@ namespace UnchainedLauncher.GUI.ViewModels {
         public readonly Action<int> ExitProgram;
         public bool CanClick { get; set; }
 
-        public SettingsVM(IUnchainedLauncherInstaller installer, IReleaseLocator unchainedReleaseLocator, IUserDialogueSpawner dialogueSpawner, InstallationType installationType, bool enablePluginAutomaticUpdates, string additionalModActors, string serverBrowserBackend, FileBackedSettings<LauncherSettings> launcherSettings, string cliArgs, Action<int> exitProgram) {
+        public SettingsVM(IUnchainedLauncherInstaller installer, IReleaseLocator unchainedReleaseLocator, IPakDir pakDir, IUserDialogueSpawner dialogueSpawner, InstallationType installationType, bool enablePluginAutomaticUpdates, string additionalModActors, string serverBrowserBackend, FileBackedSettings<LauncherSettings> launcherSettings, string cliArgs, Action<int> exitProgram) {
             Installer = installer;
             UnchainedReleaseLocator = unchainedReleaseLocator;
+            PakDir = pakDir;
             UserDialogueSpawner = dialogueSpawner;
             InstallationType = installationType;
             EnablePluginAutomaticUpdates = enablePluginAutomaticUpdates;
@@ -77,7 +78,7 @@ namespace UnchainedLauncher.GUI.ViewModels {
         }
 
 
-        public static SettingsVM LoadSettings(IChivalry2InstallationFinder installationFinder, IUnchainedLauncherInstaller installer, IReleaseLocator unchainedReleaseLocator, IUserDialogueSpawner userDialogueSpawner, Action<int> exitProgram) {
+        public static SettingsVM LoadSettings(IChivalry2InstallationFinder installationFinder, IUnchainedLauncherInstaller installer, IReleaseLocator unchainedReleaseLocator, IPakDir pakdir, IUserDialogueSpawner userDialogueSpawner, Action<int> exitProgram) {
             var cliArgsList = Environment.GetCommandLineArgs();
             var cliArgs = cliArgsList.Length > 1 ? Environment.GetCommandLineArgs().Skip(1).Aggregate((x, y) => $"{x} {y}") : "";
 
@@ -87,6 +88,7 @@ namespace UnchainedLauncher.GUI.ViewModels {
             return new SettingsVM(
                 installer,
                 unchainedReleaseLocator,
+                pakdir,
                 userDialogueSpawner,
                 loadedSettings?.InstallationType ?? DetectInstallationType(installationFinder),
                 loadedSettings?.EnablePluginAutomaticUpdates ?? true,
@@ -114,7 +116,7 @@ namespace UnchainedLauncher.GUI.ViewModels {
                 "Are you sure? This will disable all mods, reset all settings to their defaults, and uninstall the launcher. This will delete the following:",
                 "* All files in .mod_cache",
                 "* All files in TBL\\Binaries\\Win64\\Plugins",
-                "* All non-vanilla files in TBL\\Content\\Paks.",
+                "* All non-vanilla paks in TBL\\Content\\Paks.",
                 "",
                 originalExists
                 ? "IMPORTANT: Wait at least 1 second and then launch normally."
@@ -181,28 +183,11 @@ namespace UnchainedLauncher.GUI.ViewModels {
             ExitProgram(0);
         }
 
-        // TODO: This function knows too much.
-        //       It should be telling the mod manager and other things which
-        //       manage files to clean themselves up, rather than this class
-        //       being aware of everything.
         private void CleanUpInstallation_actions() {
             FileHelpers.DeleteDirectory(FilePaths.ModCachePath);
             FileHelpers.DeleteDirectory(FilePaths.PluginDir);
 
-            var vanillaFiles = new List<string>() { "pakchunk0-WindowsNoEditor.pak", "pakchunk0-WindowsNoEditor.sig" };
-            var nonVanillaFiles =
-                Directory
-                    .GetFiles(FilePaths.PakDir)
-                    .Where(fileName => {
-                        if (vanillaFiles.Any(vanillaFile => fileName.EndsWith(vanillaFile))) {
-                            Logger.Info($"Skipping vanilla file {fileName}");
-                            return false;
-                        }
-
-                        return true;
-                    }).Append(FilePaths.LastInstalledPakVersionList);
-
-            FileHelpers.DeleteFiles(nonVanillaFiles);
+            PakDir.CleanUpDir();
         }
 
         [RelayCommand]
@@ -212,7 +197,7 @@ namespace UnchainedLauncher.GUI.ViewModels {
                 "Are you sure? This will disable all mods and reset all settings to their defaults. This will delete the following:",
                 "* All files in .mod_cache",
                 "* All files in TBL\\Binaries\\Win64\\Plugins",
-                "* All non-vanilla files in TBL\\Content\\Paks.",
+                "* All non-vanilla paks in TBL\\Content\\Paks.",
                 "",
                 "After deleting, the launcher will restart itself."
             }.Aggregate((accumulator, next) => accumulator + "\n" + next);

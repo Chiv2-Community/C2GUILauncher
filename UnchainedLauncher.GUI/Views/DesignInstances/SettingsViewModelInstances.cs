@@ -9,6 +9,7 @@ namespace UnchainedLauncher.GUI.Views.DesignInstances {
         public static SettingsVM DEFAULT => new SettingsVM(
             new MockInstaller(),
             null,
+            null,
             new MessageBoxSpawner(),
             InstallationType.Steam,
             true,

@@ -1,0 +1,60 @@
+<UserControl x:Class="UnchainedLauncher.GUI.Views.MemoryProgressDisplay"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:UnchainedLauncher.GUI.Views"
+             xmlns:instances="clr-namespace:UnchainedLauncher.GUI.Views.DesignInstances"
+             xmlns:utilities="clr-namespace:UnchainedLauncher.Core.Utilities;assembly=UnchainedLauncher.Core"
+             mc:Ignorable="d"
+             d:DesignHeight="300" d:DesignWidth="300"
+             d:DataContext="{x:Static instances:MemoryProgressDesignInstances.DEFAULT_PROGRESS}">
+    <UserControl.Resources>
+        <DataTemplate DataType="{x:Type utilities:MemoryProgress}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <TextBlock 
+                    Text="{Binding TaskName, Mode=OneWay}"
+                    Grid.Row="0"
+                />
+                <ProgressBar 
+                    Grid.Row="1"
+                    Minimum="0.00"
+                    Maximum="100.00"
+                    Value="{Binding ProgressPercentage, Mode=OneWay}"/>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate DataType="{x:Type utilities:AccumulatedMemoryProgress}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <TextBlock 
+                    Text="{Binding TaskName, Mode=OneWay}"
+                    Grid.Row="0"
+                />
+                <ProgressBar 
+                    Grid.Row="1"
+                    Minimum="0.00"
+                    Maximum="100.00"
+                    Value="{Binding ProgressPercentage, Mode=OneWay}"/>
+                <Expander Grid.Row="2" IsExpanded="True">
+                    <ListView 
+                        ItemsSource="{Binding Progresses}" 
+                        HorizontalContentAlignment="Stretch"/>
+                </Expander>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+    <Grid>
+        <!--Text="{Binding TaskName, Mode=OneWay}"-->
+        <ContentControl Content="{Binding }"/>
+    </Grid>
+</UserControl>
